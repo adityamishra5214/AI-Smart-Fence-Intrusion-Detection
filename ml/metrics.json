@@ -1,0 +1,110 @@
+{
+  "classes": [
+    "NORMAL",
+    "WIND_RAIN",
+    "CLIMBING",
+    "CUTTING"
+  ],
+  "accuracy": 1.0,
+  "classification_report": {
+    "NORMAL": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 500.0
+    },
+    "WIND_RAIN": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 500.0
+    },
+    "CLIMBING": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 500.0
+    },
+    "CUTTING": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 500.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 2000.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 2000.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      500,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      500,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      500,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      500
+    ]
+  ],
+  "latency_benchmark": {
+    "mean_ms": 4.427890500053763,
+    "median_ms": 4.217199997583521,
+    "p95_ms": 6.255690001125913,
+    "p99_ms": 8.384800997955608,
+    "target_met": true
+  },
+  "num_features": 26,
+  "feature_importances": {
+    "mean_x": 0.0,
+    "mean_y": 0.0,
+    "mean_z": 0.05582505276576958,
+    "std_x": 0.0442157085212898,
+    "std_y": 0.04400088061740673,
+    "std_z": 0.0774670218721894,
+    "ptp_x": 0.08924463158723306,
+    "ptp_y": 0.03357600287887454,
+    "ptp_z": 0.022085317309245296,
+    "rms_x": 0.04458144307949809,
+    "rms_y": 0.022111386283513466,
+    "rms_z": 0.0664609007703703,
+    "rms_mag": 0.11124886946244616,
+    "skewness_z": 0.0,
+    "skewness_mag": 0.06675291502775049,
+    "kurtosis_z": 0.022066173645530228,
+    "kurtosis_mag": 0.01097731348464983,
+    "zcr_x": 0.07836281140614539,
+    "zcr_y": 0.05633200802107582,
+    "zcr_z": 0.0,
+    "band1_ratio": 0.0,
+    "band2_ratio": 0.044018520835634026,
+    "band3_ratio": 0.022407588688624767,
+    "dominant_freq": 0.03308228946060514,
+    "spectral_centroid": 0.010810507686959285,
+    "delta_gz": 0.044372656595188714
+  }
+}

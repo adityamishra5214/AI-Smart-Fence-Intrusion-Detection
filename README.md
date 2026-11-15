@@ -52,7 +52,7 @@ The system addresses critical challenges in physical border and high-stakes peri
 |                        CONCURRENT TELEMETRY INGESTION ENGINE                      |
 |                                [FastAPI + AsyncIO]                                |
 |                                                                                   |
-|  - Asynchronous MQTT worker subscribing via `aiomqtt`                             |
+|  - Asynchronous MQTT worker subscribing via `paho-mqtt` / `aiomqtt`               |
 |  - Real-time sliding window DSP & ML inference engine                             |
 |  - Degraded-mode multi-modal fusion state machine                                 |
 +──────────────────────────┬─────────────────────────────┬──────────────────────────+
@@ -64,7 +64,7 @@ The system addresses critical challenges in physical border and high-stakes peri
 |  - Key TTL: `node:{id}:alive` (3s)   |     |  - `nodes`: Topology & calibration   |
 |  - Missing key -> Immediate FAULT    |     |  - `telemetry_logs`: Raw batch data  |
 |  - Zone active status broadcaster    |     |  - `events`: Fused security breaches |
-|  - WebSocket push pipe to UI         |     |  - `fault_logs`: System downtime     |
+|  - WebSocket push pipe to UI         |     |  - `system_faults`: System downtime  |
 +──────────────────────────┬───────────+     +──────────────────────────────────────+
                            │
                            ▼
@@ -86,40 +86,20 @@ The system addresses critical challenges in physical border and high-stakes peri
 The virtual sensor generates synthetic raw $a_x(t), a_y(t), a_z(t)$ series sampled at $f_s = 100\text{ Hz}$ across a sliding window of $N = 200$ samples ($T = 2\text{ s}$ window, 50% overlap).
 
 ### 3.1 Signal Models
-
 - **Ambient Noise**:
   $$a_{\text{baseline}}(t) = \mathcal{N}(0, \sigma^2), \quad \sigma = 0.02g, \quad a_z(t) = 1.0g + \mathcal{N}(0, \sigma^2)$$
-
 - **Wind Buffeting & Rain**:
-  Low-frequency harmonic oscillations ($1 \le f_w \le 5\text{ Hz}$) with stochastic amplitude modulation modeling fence mesh flutter:
-  $$a_{\text{wind}}(t) = A(t) \cdot \sin(2\pi f_w t + \phi) + \mathcal{N}(0, \sigma_w^2)$$
-
+  Low-frequency harmonic oscillations ($1 \le f_w \le 5\text{ Hz}$) with stochastic envelope modulation:
+  $$a_{\text{wind}}(t) = (1 + \eta(t)) \sum_{i} A_i \sin(2\pi f_i t + \phi_i) + \mathcal{N}(0, \sigma_w^2)$$
 - **Climbing / Sabotage**:
-  High-frequency mechanical shock oscillations ($15 \le f_c \le 35\text{ Hz}$) superimposed on sustained mass loading along the vertical axis ($a_z$):
-  $$a_{\text{climb}}(t) = A_c \cdot e^{-\lambda t} \sin(2\pi f_c t) + \Delta g_z$$
-
+  High-frequency mechanical shock oscillations ($20 \le f_c \le 35\text{ Hz}$) superimposed on sustained downward mass loading:
+  $$a_{\text{climb}}(t) = A_c \cdot e^{-\lambda t} \sin(2\pi f_c t) + \Delta g_z \quad (\text{mean } a_z \approx 2.0g)$$
 - **Cutting**:
-  High-energy impulse shocks ($f_k > 40\text{ Hz}$) with extreme kurtosis spikes ($\kappa > 5.0$).
-
-### 3.2 Extracted Feature Vector ($\mathbf{x} \in \mathbb{R}^{14}$)
-
-1. **Root Mean Square (RMS)**:
-   $$\text{RMS} = \sqrt{\frac{1}{N}\sum_{i=1}^N x_i^2}$$
-2. **Kurtosis ($\kappa$)**:
-   $$\kappa = \frac{\frac{1}{N}\sum_{i=1}^N (x_i - \bar{x})^4}{\left(\frac{1}{N}\sum_{i=1}^N (x_i - \bar{x})^2\right)^2}$$
-3. **Zero-Crossing Rate (ZCR)**: Number of sign changes per window.
-4. **Band-Power Ratios**: FFT energy split across:
-   - **Band 1** ($0\text{--}5\text{ Hz}$): Wind dominance.
-   - **Band 2** ($5\text{--}15\text{ Hz}$): Animal disturbances.
-   - **Band 3** ($15\text{--}50\text{ Hz}$): Human structural contact.
-5. **Spectral Centroid**:
-   $$f_c = \frac{\sum f \cdot |X(f)|}{\sum |X(f)|}$$
+  High-energy impulse shocks ($f_k > 40\text{ Hz}$, damping factor $\alpha = 30$) with extreme Fisher kurtosis ($\kappa_{\text{Fisher}} > 6.0$).
 
 ---
 
 ## 4. Multi-Modal Fusion & Fail-Safe State Engine
-
-The backend strictly prevents silent failures by maintaining three distinct operating states:
 
 | Mode | System Condition | Operational Logic | Dashboard Alert State |
 | :--- | :--- | :--- | :--- |
@@ -129,129 +109,101 @@ The backend strictly prevents silent failures by maintaining three distinct oper
 
 ---
 
-## 5. Repository Directory Layout
+## 5. Physical Hardware Deployment & Replacement Guide
+
+When transitioning from Hardware-in-the-Loop simulation to physical hardware deployment:
 
 ```text
-ai-smart-fence/
-├── docker-compose.yml              # Mosquitto, PostgreSQL, Redis stack
-├── requirements.txt                # Python dependencies
-├── .env.example                    # Environment variable configurations
-│
-├── simulator/
-│   ├── __init__.py
-│   ├── generator.py                # Mathematical MPU6050 vibration synthesizer
-│   ├── mock_esp32.py               # Multithreaded virtual ESP32 node publisher
-│   └── mock_camera.py              # Event-triggered mock Pi Zero YOLO verification
-│
-├── edge/
-│   ├── __init__.py
-│   ├── dsp.py                      # Windowing, FFT, and statistical feature extraction
-│   └── filter.py                   # Digital bandpass & exceedance filtering
-│
-├── ml/
-│   ├── __init__.py
-│   ├── train_baseline.py           # Synthetic dataset generator & Random Forest trainer
-│   ├── model.joblib                # Exported edge classifier artifact
-│   └── evaluate.py                 # Confusion matrix and ROC metrics exporter
-│
-├── backend/
-│   ├── __init__.py
-│   ├── main.py                     # FastAPI core & startup hooks
-│   ├── mqtt_client.py              # Asynchronous aiomqtt ingestion worker
-│   ├── redis_state.py              # Node TTL monitoring & heartbeat watcher
-│   ├── fusion.py                   # Multi-modal decision logic & state machine
-│   ├── db.py                       # SQLAlchemy / connection pool
-│   ├── models.py                   # Database table definitions
-│   └── schema.sql                  # Raw SQL schema definition
-│
-├── dashboard/
-│   ├── __init__.py
-│   ├── app.py                      # Streamlit real-time monitoring console
-│   └── components/                 # Plots, zone map visualizer, and fault triggers
-│       └── __init__.py
-│
-├── tests/
-│   ├── __init__.py
-│   ├── test_scenarios.py           # Integration tests for Modes 1, 2, and 3
-│   └── test_dsp.py                 # Mathematical validation of feature extractors
-│
-└── benchmark/
-    ├── __init__.py
-    ├── run_evaluation.py           # 1,000-run automated test harness
-    └── generate_plots.py           # High-resolution LaTeX/PDF paper figures
+               PHYSICAL SENSOR NODE WIRING (ESP32 -> MPU6050)
+               +───────────────────+          +───────────────────+
+               |     ESP32 Node    |          |   MPU6050 (I2C)   |
+               |                   |          |                   |
+               |              3V3  +──────────+  VCC              |
+               |              GND  +──────────+  GND              |
+               |      GPIO 21 (SDA)+──────────+  SDA              |
+               |      GPIO 22 (SCL)+──────────+  SCL              |
+               |      GPIO 19 (INT)+──────────+  INT              |
+               +───────────────────+          +───────────────────+
+
+               OPTICAL VERIFICATION NODE WIRING (Raspberry Pi Zero 2 W)
+               +───────────────────+          +───────────────────+
+               | Raspberry Pi Zero |          | Pi Camera Mod 3   |
+               |                   |          |                   |
+               |         CSI Port  +══════════+  15-pin Ribbon    |
+               |      Wi-Fi / PoE  +          |  Sony IMX708      |
+               +───────────────────+          +───────────────────+
 ```
+
+### 5.1 ESP32 Sensor Node Setup
+1. Mount the MPU6050 sensor rigidly to the fence mesh inside a weather-proof IP67 enclosure using an aluminum mounting plate.
+2. Connect I2C lines: ESP32 `GPIO 21` (SDA) and `GPIO 22` (SCL), powered via 3.3V.
+3. Configure WiFi/LoRa credentials in `firmware/config.h` and point MQTT host to the edge broker IP.
+4. Firmware polls MPU6050 FIFO buffer at 100 Hz, windowing into 200-sample JSON payloads published over MQTT.
+
+### 5.2 Raspberry Pi Zero Optical Node Setup
+1. Mount the camera node on fence support posts angled at a $45^\circ$ downward sweep along the perimeter wire run.
+2. Install dependencies: `pip install paho-mqtt pillow ultralytics`
+3. Run the camera listener: `python simulator/mock_camera.py` (point broker to edge server).
+4. The node remains in ultra-low-power standby until waking upon receiving a `fence/system/trigger_cam` message from the vibration node.
 
 ---
 
-## 6. 14-Day Development Roadmap
+## 6. Development Roadmap & Milestones
 
-### Week 1: Core Signal Pipeline, DSP, Mock Nodes & Ingestion
-- [ ] **Day 1: Telemetry Schema & Vibration Synthesizer Engine**  
-  Define MQTT JSON payload formats (telemetry, heartbeat, alert). Implement `simulator/generator.py` for synthetic 3-axis waveforms (ambient noise, wind, climbing, cutting).
-- [ ] **Day 2: DSP Pipeline & Statistical Feature Extraction**  
-  Implement sliding window segmentation (2-second windows, 50% overlap). Build time-domain (RMS, Kurtosis, ZCR) and frequency-domain (FFT power bands, Spectral Centroid) feature extractors.
-- [ ] **Day 3: Baseline Classifier (Wind vs. Intrusion)**  
-  Generate 10,000 synthetic windows across 4 classes (`NORMAL`, `WIND_RAIN`, `CLIMBING`, `CUTTING`). Train and export a `RandomForestClassifier` with sub-5ms CPU inference.
-- [ ] **Day 4: Dockerized Infrastructure Setup**  
-  Configure `docker-compose.yml` for Mosquitto (1883), PostgreSQL (5432), and Redis (6379). Write `backend/schema.sql` defining node, event, and fault tables.
-- [ ] **Day 5: Virtual ESP32 Node Simulator**  
-  Implement `simulator/mock_esp32.py` simulating 3 concurrent fence zones (`zone_01`, `zone_02`, `zone_03`). Configure MQTT Last Will and Testament (LWT) and dynamic fault injection hooks (cut cable, zero flatline).
-- [ ] **Day 6: Asynchronous Ingestion Backend (FastAPI + Redis)**  
-  Implement `backend/main.py` with `aiomqtt` background tasks. Configure Redis heartbeat caching with 3-second TTL for automatic `SENSOR_FAULT` detection.
-- [ ] **Day 7: Checkpoint 1 & Stress Testing**  
-  Run 2-hour continuous ingestion test with 3 simulated nodes transmitting at 100 Hz. Validate sub-20ms DB ingestion latency and zero message loss.
-
-### Week 2: Vision Node, Fail-Safe Engine, UI & Paper Evaluation
-- [ ] **Day 8: Mock Visual Verification Node**  
-  Implement `simulator/mock_camera.py` listening to `fence/system/trigger_cam`. Run triggered YOLOv8n object detection on test frame samples and publish bounding boxes.
-- [ ] **Day 9: Multi-Modal Sensor Fusion & Fail-Safe State Engine**  
-  Implement `backend/fusion.py` evaluating Mode 1 (Full Fusion), Mode 2 (Vibration Only), and Mode 3 (Fault). Broadcast fused state changes via Redis Pub/Sub channels.
-- [ ] **Day 10: Operator Dashboard (Streamlit / Web UI)**  
-  Build real-time perimeter zone map, live 3-axis vibration graphs, and triggered camera feeds. Add interactive fault injection console (Simulate Cable Cut, Storm, Broker Outage).
-- [ ] **Day 11: End-to-End Fault Injection & Scenario Verification**  
-  Validate rejection of continuous 4 Hz wind noise without false triggers. Validate sub-3-second transition to `FAULT` on simulated node disconnect.
-- [ ] **Day 12: Automated Research Paper Benchmark Harness**  
-  Execute 1,000 automated evaluation runs measuring False Alarm Rate (FAR), Recall, Latency, and Fault Uptime.
-- [ ] **Day 13: Results Visualization & Metric Export**  
-  Generate confusion matrices, ROC/PR curves, and latency breakdown charts ready for LaTeX paper insertion.
-- [ ] **Day 14: Final Integration, Code Freeze & Deliverables**  
-  Verify single-command startup (`docker compose up` + run scripts) and document hardware replacement steps.
+- [x] **Day 1:** Telemetry Schema & Vibration Synthesizer Engine
+- [x] **Day 2:** DSP Pipeline & Statistical Feature Extraction ($< 0.5\,\text{ms}$ latency)
+- [x] **Day 3:** Baseline Edge Classifier ($100\%$ validation accuracy, $4.4\,\text{ms}$ inference)
+- [x] **Day 4:** Dockerized Infrastructure Setup & Persistence Layer
+- [x] **Day 5:** Virtual ESP32 Node Simulator with Dynamic Fault Injection
+- [x] **Day 6:** Asynchronous Ingestion Backend & Multi-Modal State Machine
+- [x] **Day 7:** Checkpoint 1 & Stress Test ($5.79\,\text{ms}$ end-to-end latency)
+- [x] **Day 8:** Mock Visual Verification Node & Synthetic Surveillance Dataset
+- [x] **Day 9:** Multi-Modal Fusion Engine with Redis Pub/Sub Broadcasting
+- [x] **Day 10:** Operator Monitoring Dashboard (Streamlit UI with Live Waveforms & Map)
+- [x] **Day 11:** End-to-End Fault Injection & Scenario Verification (Scenarios A, B, C, D)
+- [x] **Day 12:** Automated 1,000-Run Paper Benchmark Harness
+- [x] **Day 13:** Results Visualization, Latency Breakdown Charts & LaTeX Table Exporter
+- [x] **Day 14:** Final Integration, Code Freeze & Deliverables
 
 ---
 
-## 7. Quick Start & Execution
+## 7. Experimental Benchmark Results (1,000 Runs)
 
-### 7.1 Prerequisites
-- Python 3.11+
-- Docker & Docker Compose
-- Git
+| Evaluation Metric | Experimental Result | Target Requirement | Compliance |
+| :--- | :---: | :---: | :---: |
+| **False Alarm Rate (FAR)** | **`0.00%`** | $< 1.0\%$ | **PASSED** |
+| **Intrusion Detection Recall** | **`100.00%`** | $> 98.0\%$ | **PASSED** |
+| **Mean End-to-End Latency** | **`52.81 ms`** | $< 300.0\text{ ms}$ | **PASSED** |
+| **95th Percentile Latency** | **`56.13 ms`** | $< 350.0\text{ ms}$ | **PASSED** |
+| **Fault Detection Latency** | **`0.0392 ms`** | $< 5.0\text{ ms}$ | **PASSED** |
 
-### 7.2 Launch Infrastructure
+Generated publication artifacts:
+- [`benchmark/fig_confusion_matrix.png`](file:///C:/Users/adity/Desktop/AI-Smart-Fence-Intrusion-Detection/benchmark/fig_confusion_matrix.png): Multi-class confusion matrix.
+- [`benchmark/fig_roc_pr_curves.png`](file:///C:/Users/adity/Desktop/AI-Smart-Fence-Intrusion-Detection/benchmark/fig_roc_pr_curves.png): ROC & Precision-Recall comparison curves.
+- [`benchmark/fig_latency_breakdown.png`](file:///C:/Users/adity/Desktop/AI-Smart-Fence-Intrusion-Detection/benchmark/fig_latency_breakdown.png): Stage-by-stage latency breakdown.
+- [`benchmark/table_benchmark_summary.tex`](file:///C:/Users/adity/Desktop/AI-Smart-Fence-Intrusion-Detection/benchmark/table_benchmark_summary.tex): LaTeX summary table.
+
+---
+
+## 8. Quick Start & Execution
+
+### 8.1 Run the Full Test Suite
 ```bash
-# Clone and enter repo
-git clone <repo-url>
-cd ai-smart-fence
-
-# Launch Mosquitto, PostgreSQL, and Redis
-docker compose up -d
-
-# Create virtual environment and install dependencies
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
+python -m pytest tests/ -v
 ```
 
-### 7.3 Run Simulation Demo
+### 8.2 Run End-to-End Multi-Modal Simulation Demo
 ```bash
-# Terminal 1: Run Ingestion Backend
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+python run_demo.py
+```
 
-# Terminal 2: Run Mock ESP32 Vibration Node
-python -m simulator.mock_esp32
-
-# Terminal 3: Run Mock Camera Node
-python -m simulator.mock_camera
-
-# Terminal 4: Run Operator Dashboard
+### 8.3 Launch Operator Monitoring Dashboard
+```bash
 streamlit run dashboard/app.py
+```
+
+### 8.4 Run Research Benchmark Harness & Generate Plots
+```bash
+python benchmark/run_evaluation.py
+python benchmark/generate_plots.py
 ```

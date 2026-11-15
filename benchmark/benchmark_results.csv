@@ -1,0 +1,6 @@
+Metric,Value,Unit,Benchmark Requirement,Status
+False Alarm Rate (FAR),0.00,%,< 1.0%,PASSED
+Detection Recall,100.00,%,> 98.0%,PASSED
+Mean E2E Detection Latency,52.81,ms,< 300 ms,PASSED
+P95 E2E Detection Latency,56.13,ms,< 350 ms,PASSED
+Mean Fault Detection Latency,0.0392,ms,< 5 ms,PASSED

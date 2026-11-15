@@ -1,6 +1,10 @@
 """
 Mathematical validation tests for feature extractors in edge/dsp.py.
-Validates RMS, Kurtosis, ZCR, FFT energy band ratios, and Spectral Centroid.
+Validates:
+1. Mean, Std Dev, Peak-to-Peak (PTP), RMS, Skewness, Kurtosis, Zero-Crossing Rate (ZCR).
+2. Frequency-domain: FFT power bands (0-5 Hz, 5-15 Hz, 15-50 Hz), Dominant Frequency, Spectral Centroid.
+3. Feature vector sizing and dictionary exports.
+4. Window slicing with 50% overlap.
 """
 
 import numpy as np
@@ -8,8 +12,9 @@ import pytest
 from edge.dsp import (
     compute_rms,
     compute_kurtosis,
+    compute_skewness,
     compute_zcr,
-    compute_spectral_features,
+    compute_frequency_features,
     extract_features,
     extract_features_dict,
     slice_windows,
@@ -24,7 +29,7 @@ def synth():
 
 
 def test_rms_computation():
-    # DC signal of 3.0 should have RMS = 3.0
+    # DC signal of 3.0 has RMS = 3.0
     dc = np.full(100, 3.0)
     assert np.isclose(compute_rms(dc), 3.0)
 
@@ -35,12 +40,20 @@ def test_rms_computation():
     assert np.isclose(compute_rms(sine), expected_rms, atol=0.05)
 
 
-def test_kurtosis_computation():
-    # Gaussian noise should have Pearson kurtosis close to 3.0
+def test_kurtosis_and_skewness():
     rng = np.random.default_rng(42)
     gauss = rng.normal(0, 1.0, size=10000)
-    kurt = compute_kurtosis(gauss)
-    assert np.isclose(kurt, 3.0, atol=0.2)
+    # Fisher kurtosis of standard Gaussian is ~ 0.0
+    kurt_fisher = compute_kurtosis(gauss, fisher=True)
+    assert np.isclose(kurt_fisher, 0.0, atol=0.2)
+
+    # Pearson kurtosis is ~ 3.0
+    kurt_pearson = compute_kurtosis(gauss, fisher=False)
+    assert np.isclose(kurt_pearson, 3.0, atol=0.2)
+
+    # Symmetric Gaussian has skewness ~ 0.0
+    skew = compute_skewness(gauss)
+    assert np.isclose(skew, 0.0, atol=0.1)
 
 
 def test_zcr_computation():
@@ -51,31 +64,33 @@ def test_zcr_computation():
     assert zcr in (9, 10, 11)
 
 
-def test_spectral_features_energy_split():
+def test_frequency_features_energy_split():
     # Signal purely in Band 1 (e.g. 3 Hz)
     t = np.arange(200) / 100.0
     s_band1 = np.sin(2 * np.pi * 3.0 * t)
-    b1, b2, b3, centroid = compute_spectral_features(s_band1, fs=100.0)
+    b1, b2, b3, dom, centroid = compute_frequency_features(s_band1, fs=100.0)
     assert b1 > 0.85
+    assert np.isclose(dom, 3.0, atol=0.5)
     assert 2.0 <= centroid <= 4.0
 
     # Signal purely in Band 3 (e.g. 30 Hz)
     s_band3 = np.sin(2 * np.pi * 30.0 * t)
-    b1_3, b2_3, b3_3, centroid_3 = compute_spectral_features(s_band3, fs=100.0)
+    b1_3, b2_3, b3_3, dom_3, centroid_3 = compute_frequency_features(s_band3, fs=100.0)
     assert b3_3 > 0.85
+    assert np.isclose(dom_3, 30.0, atol=0.5)
     assert 27.0 <= centroid_3 <= 33.0
 
 
 def test_feature_vector_dimension(synth):
     sample = synth.generate_sample(SignalType.NORMAL, num_samples=200)
     vec = extract_features(sample, fs=100.0)
-    assert len(vec) == 14
-    assert len(FEATURE_NAMES) == 14
+    assert len(vec) == len(FEATURE_NAMES)
 
     feat_dict = extract_features_dict(sample, fs=100.0)
-    assert len(feat_dict) == 14
+    assert len(feat_dict) == len(FEATURE_NAMES)
     for name in FEATURE_NAMES:
         assert name in feat_dict
+        assert not np.isnan(feat_dict[name])
 
 
 def test_slice_windows():

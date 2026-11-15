@@ -9,6 +9,7 @@ services:
       - "1883:1883"
       - "9001:9001"
     volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
@@ -40,4 +41,3 @@ volumes:
   mosquitto_log:
   redis_data:
   postgres_data:
-

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS telemetry_logs (
     band1_ratio DOUBLE PRECISION,
     band2_ratio DOUBLE PRECISION,
     band3_ratio DOUBLE PRECISION,
+    dominant_freq DOUBLE PRECISION,
     spectral_centroid DOUBLE PRECISION,
     predicted_class VARCHAR(32)
 );
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
     metadata JSONB
 );
 
-CREATE TABLE IF NOT EXISTS fault_logs (
+CREATE TABLE IF NOT EXISTS system_faults (
     id BIGSERIAL PRIMARY KEY,
     node_id VARCHAR(64) REFERENCES nodes(node_id),
     fault_type VARCHAR(64) NOT NULL,
@@ -48,3 +49,5 @@ CREATE TABLE IF NOT EXISTS fault_logs (
     resolved_at TIMESTAMP WITH TIME ZONE
 );
 
+-- Compatibility view
+CREATE OR REPLACE VIEW fault_logs AS SELECT * FROM system_faults;

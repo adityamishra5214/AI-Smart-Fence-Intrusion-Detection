@@ -1,0 +1,22 @@
+{
+  "total_evaluation_runs": 1000,
+  "environmental_runs": 500,
+  "breach_runs": 500,
+  "false_alarm_rate_pct": 0.0,
+  "false_alarms_count": 0,
+  "detection_recall_pct": 100.0,
+  "true_positives_count": 500,
+  "latency_end_to_end_ms": {
+    "mean": 52.8117007999881,
+    "median": 52.34070000005886,
+    "p95": 56.133249999993495,
+    "p99": 62.03998100026182,
+    "min": 49.96969999956491,
+    "max": 96.82380000049307
+  },
+  "fault_detection_latency_ms": {
+    "mean": 0.03924100001313491,
+    "median": 0.030700000024808105,
+    "p95": 0.08301999946525028
+  }
+}
